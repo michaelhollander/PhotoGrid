@@ -60,23 +60,53 @@ def build_rows(images, output_width, min_spacing):
     if not images:
         return []
 
-    rows = []
-    current_row = []
+    # Start with the first image in the first row
+    rows = [[images[0]]]
+    
+    # Iterate over the rest of the images
+    for image in images[1:]:
+        current_row = rows[-1]
+        
+        # Calculate the width of the current row if we add the new image
+        current_row_width = sum(img['width'] for img in current_row)
+        # The number of spaces in the potential new row is len(current_row)
+        potential_width = current_row_width + (len(current_row) * min_spacing) + image['width']
 
-    for image in images:
-        if not current_row:
+        if potential_width <= output_width:
+            # Add the image to the current row
             current_row.append(image)
         else:
-            current_row_width = sum(img['width'] for img in current_row)
-            potential_width = current_row_width + (len(current_row) * min_spacing) + image['width']
+            # Start a new row
+            rows.append([image])
             
-            if potential_width <= output_width:
-                current_row.append(image)
-            else:
-                rows.append(current_row)
-                current_row = [image]
-    
-    if current_row:
-        rows.append(current_row)
-        
     return rows
+
+def justify_row(row, output_width, min_spacing, max_spacing):
+    """
+    Calculates the x-positions for images in a single row to justify them.
+    """
+    if not row:
+        return []
+
+    if len(row) <= 1:
+        return [{'image': row[0], 'x': 0}]
+
+    total_image_width = sum(img['width'] for img in row)
+    num_gaps = len(row) - 1
+    
+    leftover_space = output_width - total_image_width - (num_gaps * min_spacing)
+    
+    extra_spacing_per_gap = 0
+    if leftover_space > 0:
+        extra_spacing_per_gap = leftover_space / num_gaps
+    
+    final_spacing = min_spacing + extra_spacing_per_gap
+    final_spacing = min(final_spacing, max_spacing)
+
+    positions = []
+    current_x = 0
+    for i, image in enumerate(row):
+        positions.append({'image': image, 'x': current_x})
+        current_x += image['width'] + final_spacing
+        
+    return positions
