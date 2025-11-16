@@ -105,62 +105,57 @@ class PhotoGridApp(tk.Tk):
             messagebox.showerror("Invalid Input", "Please enter valid integers for dimensions and spacing.")
             return
 
-        if not self.horizontal_images and not self.vertical_images:
+        all_images = self.horizontal_images + self.vertical_images
+        num_images = len(all_images)
+        if num_images == 0:
             messagebox.showinfo("No Images", "No images to generate a layout from.")
             return
 
-        all_images = self.horizontal_images + self.vertical_images
         random.shuffle(all_images)
-        num_images = len(all_images)
-        if num_images == 0: return
-
         sizer = calculate_target_sizes(self.horizontal_images, self.vertical_images)
 
-        # --- Search for the best scale to minimize wasted space ---
+        # --- Search for the best scale to maximize area coverage ---
         best_layout = None
-        min_cost = float('inf')
+        max_coverage = 0
 
-        # 1. Find a reasonable center-point for our search
         target_area_per_image = (output_w * output_h) / num_images
         target_scale = target_area_per_image ** 0.5
         
-        # 2. Test a range of scales around that center-point
-        for i in range(20):
-            scale = target_scale * (0.5 + (i / 19.0) * 1.5) # Search from 50% to 200% of target
+        for i in range(40): # Increased search steps
+            scale = target_scale * (0.5 + (i / 39.0) * 2.0) # Search from 50% to 250%
             if scale == 0: continue
 
             w_h, h_h, w_v, h_v = sizer(scale)
-
             sized_images = [{'path': img.path, 'width': w_h if img.aspect_ratio > 1 else w_v, 'height': h_h if img.aspect_ratio > 1 else h_v} for img in all_images]
             rows_of_images = build_rows(sized_images, output_w, min_space)
 
-            # Calculate the total height of this potential layout
-            total_height = 0
-            num_v_gaps = len(rows_of_images) - 1
-            if num_v_gaps > 0:
-                # Estimate vertical spacing based on a "perfect fit"
-                total_row_height = sum(max(img['height'] for img in row) for row in rows_of_images)
-                v_spacing = (output_h - total_row_height) / num_v_gaps
-                v_spacing = max(min_space, v_spacing)
-                total_height = total_row_height + num_v_gaps * v_spacing
-            elif rows_of_images:
-                total_height = max(img['height'] for img in rows_of_images[0])
+            # Calculate layout dimensions and total photo area
+            layout_w = 0
+            layout_h = 0
+            total_photo_area = 0
+            
+            current_y = 0
+            for row in rows_of_images:
+                row_height = max(img['height'] for img in row)
+                row_width = sum(img['width'] for img in row) + (len(row) - 1) * min_space if len(row) > 1 else sum(img['width'] for img in row)
+                layout_w = max(layout_w, row_width)
+                layout_h = current_y + row_height
+                current_y += row_height + min_space
+                total_photo_area += sum(img['width'] * img['height'] for img in row)
 
-            # Cost is how far we are from the target height
-            cost = abs(output_h - total_height)
+            # --- Scoring ---
+            # Penalize layouts that are too big
+            if layout_w > output_w or layout_h > output_h:
+                coverage_score = 0
+            else:
+                coverage_score = total_photo_area / (output_w * output_h)
 
-            if cost < min_cost:
-                min_cost = cost
+            if coverage_score > max_coverage:
+                max_coverage = coverage_score
                 
                 # Construct the full layout for this "best" scale
                 final_layout = []
                 current_y = 0
-                
-                # Recalculate final vertical spacing for the best layout
-                total_row_height = sum(max(img['height'] for img in row) for row in rows_of_images)
-                v_spacing = (output_h - total_row_height) / num_v_gaps if num_v_gaps > 0 else 0
-                v_spacing = max(min_space, v_spacing)
-
                 for row in rows_of_images:
                     row_height = max(img['height'] for img in row)
                     justified_positions = justify_row(row, output_w, min_space, max_space)
@@ -170,12 +165,18 @@ class PhotoGridApp(tk.Tk):
                             'x': pos_info['x'], 'y': current_y,
                             'width': pos_info['image']['width'], 'height': pos_info['image']['height']
                         })
-                    current_y += row_height + v_spacing
+                    current_y += row_height + min_space
                 best_layout = final_layout
 
         self.layout = best_layout
         self._update_preview()
         self.save_button.config(state="normal")
+        
+        coverage_percent = max_coverage * 100
+        if coverage_percent >= 80:
+            messagebox.showinfo("Layout Generated", f"Coverage: {coverage_percent:.1f}%\nGoal of 80% was met.")
+        else:
+            messagebox.showwarning("Layout Generated", f"Coverage: {coverage_percent:.1f}%\nCould not achieve 80% coverage with the current settings.")
 
     def _update_preview(self):
         if not self.layout:
