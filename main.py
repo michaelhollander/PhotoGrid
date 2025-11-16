@@ -151,7 +151,12 @@ class PhotoGridApp(tk.Tk):
                 v_imgs = [img for img in self.all_images if img.aspect_ratio < 1]
                 sizer = calculate_target_sizes(h_imgs, v_imgs)
                 w_h, h_h, w_v, h_v = sizer(scale)
-                sized_images = [{'path': img.path, 'width': w_h if img.aspect_ratio > 1 else w_v, 'height': h_h if img.aspect_ratio > 1 else h_v} for img in self.all_images]
+                sized_images = []
+                for img_info in self.all_images:
+                    if img_info.aspect_ratio > 1: # Horizontal
+                        sized_images.append({'path': img_info.path, 'width': w_h, 'height': h_h})
+                    else: # Vertical
+                        sized_images.append({'path': img_info.path, 'width': w_v, 'height': h_v})
 
             rows_of_images = build_rows(sized_images, output_w, min_space)
             layout_w, layout_h, total_photo_area = self._calculate_layout_metrics(rows_of_images, min_space)

@@ -5,16 +5,10 @@ def calculate_target_sizes(horizontal_images, vertical_images):
     Calculates the average aspect ratios and returns a function that can generate
     target dimensions for a given scaling factor.
 
-    The returned function solves the system of equations:
-    1. w_h / h_h = ar_h
-    2. w_v / h_v = ar_v
-    3. w_h * h_h = w_v * h_v = area
-    
-    If we set area = scale^2, we can solve for the dimensions:
-    w_h = scale * sqrt(ar_h)
-    h_h = scale / sqrt(ar_h)
-    w_v = scale * sqrt(ar_v)
-    h_v = scale / sqrt(ar_v)
+    The returned function now assumes:
+    1. All horizontal images will have a height equal to 'scale'.
+    2. All vertical images will have a width equal to 'scale'.
+    3. Aspect ratios are preserved.
 
     Args:
         horizontal_images (list): A list of ImageInfo objects for horizontal images.
@@ -25,26 +19,21 @@ def calculate_target_sizes(horizontal_images, vertical_images):
                   tuple of (w_h, h_h, w_v, h_v).
     """
     
-    if not horizontal_images or not vertical_images:
-        # Handle cases with no images of one type, though the layout will be trivial
-        avg_ar_h = 16/9
-        avg_ar_v = 9/16
-    else:
-        avg_ar_h = sum(img.aspect_ratio for img in horizontal_images) / len(horizontal_images)
-        avg_ar_v = sum(img.aspect_ratio for img in vertical_images) / len(vertical_images)
-
-    sqrt_ar_h = math.sqrt(avg_ar_h)
-    sqrt_ar_v = math.sqrt(avg_ar_v)
+    avg_ar_h = sum(img.aspect_ratio for img in horizontal_images) / len(horizontal_images) if horizontal_images else 1.0
+    avg_ar_v = sum(img.aspect_ratio for img in vertical_images) / len(vertical_images) if vertical_images else 1.0
 
     def sizer(scale):
-        w_h = scale * sqrt_ar_h
-        h_h = scale / sqrt_ar_h
-        w_v = scale * sqrt_ar_v
-        h_v = scale / sqrt_ar_v
+        # For horizontal images, scale is the height
+        h_h = scale
+        w_h = scale * avg_ar_h
+        
+        # For vertical images, scale is the width
+        w_v = scale
+        h_v = scale / avg_ar_v
+        
         return w_h, h_h, w_v, h_v
 
     return sizer
-
 def build_rows(images, output_width, min_spacing):
     """
     Groups a list of images into rows based on a greedy algorithm.

@@ -7,7 +7,7 @@ class TestLayout(unittest.TestCase):
     def test_calculate_target_sizes(self):
         """
         Tests that the calculated sizes for horizontal and vertical images
-        maintain aspect ratio and have equal area.
+        maintain aspect ratio and have equal height/width based on scale.
         """
         horizontal_images = [
             ImageInfo(path='h1.jpg', width=400, height=300, aspect_ratio=4/3)
@@ -19,10 +19,13 @@ class TestLayout(unittest.TestCase):
         scale = 100
         w_h, h_h, w_v, h_v = sizer(scale)
 
+        # 1. Check if horizontal height is scale
+        self.assertAlmostEqual(h_h, scale, places=5)
+        # 2. Check if vertical width is scale
+        self.assertAlmostEqual(w_v, scale, places=5)
+        # 3. Check if aspect ratios are preserved
         self.assertAlmostEqual(w_h / h_h, 4/3, places=5)
         self.assertAlmostEqual(w_v / h_v, 3/4, places=5)
-        self.assertAlmostEqual(w_h * h_h, w_v * h_v, places=5)
-        self.assertAlmostEqual(w_h * h_h, scale**2, places=5)
 
     def test_build_rows(self):
         """
