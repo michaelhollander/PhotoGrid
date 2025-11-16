@@ -123,8 +123,19 @@ class PhotoGridApp(tk.Tk):
         best_layout = None
         max_score = -float('inf')
 
-        target_area_per_image = (output_w * output_h) / num_images
-        target_scale = target_area_per_image ** 0.5
+        # New, smarter target scale calculation
+        canvas_aspect_ratio = output_w / output_h
+        avg_aspect_ratio = sum(img.aspect_ratio for img in self.all_images) / num_images if num_images > 0 else 1
+        
+        # Estimate num columns to guess a width-constrained size
+        est_cols = (num_images * canvas_aspect_ratio / avg_aspect_ratio) ** 0.5
+        est_cols = max(1, round(est_cols))
+        
+        # Estimate a target width based on this
+        target_w = (output_w - (est_cols - 1) * min_space) / est_cols
+        target_h = target_w / avg_aspect_ratio
+        target_area = target_w * target_h
+        target_scale = max(1, target_area ** 0.5)
         
         for i in range(50):
             scale = target_scale * (0.5 + (i / 49.0) * 2.5)
