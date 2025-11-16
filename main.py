@@ -1,8 +1,8 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, colorchooser
 import os
 import random
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageOps
 from photogrid.image_utils import analyze_images, crop_to_aspect_ratio
 from photogrid.layout import calculate_target_sizes, build_rows, justify_row
 
@@ -18,6 +18,7 @@ class PhotoGridApp(tk.Tk):
         self.all_images = []
         self.layout = None
         self.preview_image = None
+        self.background_color = 'white'  # Default background color
 
         # --- Main Layout ---
         main_frame = ttk.Frame(self)
@@ -67,6 +68,26 @@ class PhotoGridApp(tk.Tk):
         self.crop_check = ttk.Checkbutton(crop_frame, text="Enable Smart Cropping", variable=self.crop_var)
         self.crop_check.pack(padx=5, pady=2, anchor="w")
 
+        # Background Color
+        color_frame = ttk.LabelFrame(controls_frame, text="Background Color")
+        color_frame.pack(fill=tk.X, padx=5, pady=5)
+        color_button_frame = ttk.Frame(color_frame)
+        color_button_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Button(color_button_frame, text="Choose Color...", command=self.choose_background_color).pack(side=tk.LEFT)
+        self.color_preview = tk.Canvas(color_button_frame, width=30, height=20, bg='white', relief=tk.SUNKEN, borderwidth=1)
+        self.color_preview.pack(side=tk.LEFT, padx=(10, 0))
+
+        # JPEG Quality
+        quality_frame = ttk.LabelFrame(controls_frame, text="JPEG Quality")
+        quality_frame.pack(fill=tk.X, padx=5, pady=5)
+        quality_control_frame = ttk.Frame(quality_frame)
+        quality_control_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Label(quality_control_frame, text="Quality:").grid(row=0, column=0, sticky="w")
+        self.quality_entry = ttk.Entry(quality_control_frame, width=6)
+        self.quality_entry.grid(row=0, column=1, padx=5)
+        self.quality_entry.insert(0, "95")
+        ttk.Label(quality_control_frame, text="(1-100)").grid(row=0, column=2, sticky="w")
+
         # Actions
         action_frame = ttk.Frame(controls_frame)
         action_frame.pack(fill=tk.X, padx=5, pady=10)
@@ -85,22 +106,28 @@ class PhotoGridApp(tk.Tk):
         self.preview_label.grid(row=0, column=0, sticky="nsew")
 
     def select_folder(self):
-        path = filedialog.askdirectory()
+        path = filedialog.askdirectory(initialdir=os.path.expanduser("~"))
         if not path:
             return
-        
+
         self.folder_path = path
         h, v = analyze_images(self.folder_path)
         self.all_images = h + v
-        
+
         total_images = len(self.all_images)
         self.folder_label.config(text=f"Selected: {os.path.basename(self.folder_path)}\n({total_images} images found)")
-        
+
         if total_images > 0:
             self.generate_button.config(state="normal")
         else:
             self.generate_button.config(state="disabled")
             messagebox.showinfo("No Images Found", "Could not find any compatible (horizontal/vertical) JPEG images in the selected folder.")
+
+    def choose_background_color(self):
+        color = colorchooser.askcolor(color=self.background_color, title="Choose Background Color")
+        if color[1]:  # color[1] is the hex string
+            self.background_color = color[1]
+            self.color_preview.config(bg=self.background_color)
 
     def generate_layout(self):
         try:
@@ -230,10 +257,11 @@ class PhotoGridApp(tk.Tk):
         is_cropping = self.crop_var.get()
         target_aspect_ratio = output_w / output_h
 
-        preview_img = Image.new('RGB', (output_w, output_h), 'lightgrey')
+        preview_img = Image.new('RGB', (output_w, output_h), self.background_color)
 
         for img_layout in self.layout:
             with Image.open(img_layout['path']) as img:
+                img = ImageOps.exif_transpose(img)
                 if is_cropping:
                     img = crop_to_aspect_ratio(img, target_aspect_ratio)
                 img = img.resize((int(img_layout['width']), int(img_layout['height'])), Image.Resampling.LANCZOS)
@@ -252,23 +280,31 @@ class PhotoGridApp(tk.Tk):
         save_path = filedialog.asksaveasfilename(defaultextension=".jpg", filetypes=[("JPEG Image", "*.jpg")], title="Save Collage As...")
         if not save_path: return
 
-        output_w = int(self.width_entry.get())
-        output_h = int(self.height_entry.get())
+        try:
+            output_w = int(self.width_entry.get())
+            output_h = int(self.height_entry.get())
+            quality = int(self.quality_entry.get())
+            quality = max(1, min(100, quality))  # Clamp to 1-100 range
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Please enter valid integers for dimensions and quality.")
+            return
+
         is_cropping = self.crop_var.get()
         target_aspect_ratio = output_w / output_h
         
-        final_image = Image.new('RGB', (output_w, output_h), 'white')
+        final_image = Image.new('RGB', (output_w, output_h), self.background_color)
 
         for img_layout in self.layout:
             with Image.open(img_layout['path']) as img:
+                img = ImageOps.exif_transpose(img)
                 if is_cropping:
                     img = crop_to_aspect_ratio(img, target_aspect_ratio)
                 img = img.resize((int(img_layout['width']), int(img_layout['height'])), Image.Resampling.LANCZOS)
                 final_image.paste(img, (int(img_layout['x']), int(img_layout['y'])))
         
         try:
-            final_image.save(save_path)
-            messagebox.showinfo("Success", f"Image saved successfully to:\n{save_path}")
+            final_image.save(save_path, quality=quality, optimize=True)
+            messagebox.showinfo("Success", f"Image saved successfully to:\n{save_path}\nQuality: {quality}")
         except Exception as e:
             messagebox.showerror("Save Error", f"Could not save the image.\nError: {e}")
 
