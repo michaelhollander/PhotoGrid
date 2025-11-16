@@ -1,5 +1,5 @@
 import os
-from PIL import Image
+from PIL import Image, ImageOps
 from collections import namedtuple
 
 ImageInfo = namedtuple('ImageInfo', ['path', 'width', 'height', 'aspect_ratio'])
@@ -7,12 +7,6 @@ ImageInfo = namedtuple('ImageInfo', ['path', 'width', 'height', 'aspect_ratio'])
 def analyze_images(folder_path):
     """
     Scans a directory for JPEG images and categorizes them into horizontal and vertical lists.
-
-    Args:
-        folder_path (str): The path to the directory to scan.
-
-    Returns:
-        tuple: A tuple containing two lists: (horizontal_images, vertical_images)
     """
     horizontal_images = []
     vertical_images = []
@@ -27,10 +21,12 @@ def analyze_images(folder_path):
 
             path = os.path.join(folder_path, filename)
             with Image.open(path) as img:
+                # Apply EXIF orientation before getting dimensions
+                img = ImageOps.exif_transpose(img)
                 width, height = img.size
                 
                 if width == height:
-                    continue # Ignore square images as per the test
+                    continue # Ignore square images
 
                 aspect_ratio = width / height
                 info = ImageInfo(path=path, width=width, height=height, aspect_ratio=aspect_ratio)
